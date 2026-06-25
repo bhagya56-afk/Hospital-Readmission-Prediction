@@ -6,83 +6,16 @@ import streamlit as st
 import plotly.graph_objects as go
 
 # ======================================================================
-# PAGE CONFIGURATION & THEME RE-ARCHITECTING
+# CONFIGURATION
 # ======================================================================
 st.set_page_config(
-    page_title="Pulse Clinical Analytics Console",
+    page_title="Pulse Readmission Dashboard",
     page_icon="🩺",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered", # Better readability than wide-stretch for standard use
 )
 
-# Custom injection to change the UI/UX from the dark grid to a modern, crisp clean EHR interface
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-    
-    /* Global Overrides */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* App Clean Layout Card Styling */
-    .metric-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
-        margin-bottom: 16px;
-    }
-    
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 4px 12px;
-        border-radius: 50px;
-    }
-    
-    .status-pill.online {
-        background-color: #ecfdf5;
-        color: #065f46;
-        border: 1px solid #a7f3d0;
-    }
-    
-    /* Clean Typography */
-    .dashboard-title {
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-        color: #0f172a;
-        margin-bottom: 4px;
-    }
-    
-    .dashboard-subtitle {
-        font-size: 14px;
-        color: #64748b;
-        margin-bottom: 24px;
-    }
-    
-    .section-banner {
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #475569;
-        border-bottom: 1px solid #e2e8f0;
-        padding-bottom: 6px;
-        margin-bottom: 16px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 # ======================================================================
-# CORE CONSTANTS — (Must remain untouched for model pipeline alignment)
+# CONSTANTS — Must match the notebook training setup exactly
 # ======================================================================
 DRUG_COLS = [
     "metformin", "repaglinide", "nateglinide", "chlorpropamide",
@@ -173,7 +106,7 @@ for _drug in DRUG_COLS:
 
 
 # ======================================================================
-# DATA RESOURCE PIPELINE LOADERS
+# CACHED RESOURCE LOADING
 # ======================================================================
 @st.cache_resource
 def load_artifacts():
@@ -186,14 +119,13 @@ def load_artifacts():
 try:
     model, scaler, feature_columns = load_artifacts()
     artifacts_loaded = True
-    load_error = None
 except Exception as e:
     artifacts_loaded = False
     load_error = str(e)
 
 
 # ======================================================================
-# INFERENCE SYSTEM COMPUTATIONS
+# FEATURE ENGINEERING & PROCESSING
 # ======================================================================
 def age_group_to_midpoint(age_group: str) -> float:
     nums = np.array(re.findall(r"\d+", age_group), dtype=float)
@@ -242,7 +174,6 @@ def build_raw_input_row(fv: dict) -> pd.DataFrame:
 
 def preprocess_for_model(raw_df: pd.DataFrame) -> pd.DataFrame:
     categorical_cols = raw_df.select_dtypes(include=["object"]).columns.tolist()
-
     for col in categorical_cols:
         if col in CATEGORY_LEVELS:
             raw_df[col] = pd.Categorical(raw_df[col], categories=CATEGORY_LEVELS[col])
@@ -262,105 +193,101 @@ def predict_readmission(fv: dict):
 
 
 # ======================================================================
-# LAYOUT STRUCTURE REMODEL: TWO-COLUMN ANALYSIS LAYOUT
+# CLEAN, SIMPLIFIED APPLICATION HEADER
 # ======================================================================
-
-# Top App Header Bar Area
-col_header, col_badge = st.columns([0.8, 0.2])
-with col_header:
-    st.markdown('<div class="dashboard-title">Pulse Risk Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-subtitle">Decision Support Console for 30-Day Diabetic Patient Readmission Risks</div>', unsafe_allow_html=True)
-with col_badge:
-    st.markdown('<div style="text-align: right; margin-top: 12px;"><span class="status-pill online">● ENGINE ONLINE</span></div>', unsafe_allow_html=True)
+st.title("🩺 30-Day Hospital Readmission Tool")
+st.markdown(
+    "Fill out the standard demographic and encounter metrics below to evaluate clinical "
+    "readmission risk probability via our validated machine learning backend framework."
+)
 
 if not artifacts_loaded:
-    st.error(f"⚠️ Initialization Error: Missing core telemetry pipeline file artifacts. ({load_error})")
+    st.error(f"⚠️ App files (`model.pkl`, `scaler.pkl`, `feature_columns.pkl`) missing: {load_error}")
     st.stop()
 
-# Layout Generation Split
-input_workspace, output_workspace = st.columns([0.45, 0.55], gap="large")
-
-with input_workspace:
-    st.markdown('<div class="section-banner">Patient Intake Form</div>', unsafe_allow_html=True)
+# ======================================================================
+# USER-FRIENDLY ORGANIZED INTERACTIVE CONTROLS
+# ======================================================================
+with st.form("simplified_intake_form"):
     
-    with st.container(border=True):
-        st.subheader("Demographics & History")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            race = st.selectbox("Race Base", RACE_OPTIONS)
-        with c2:
-            gender = st.selectbox("Gender Orientation", GENDER_OPTIONS)
-        with c3:
-            age_group = st.selectbox("Cohort Age Bracket", AGE_GROUPS, index=6)
-            
-        st.subheader("Administrative Log")
-        admission_type_label = st.selectbox("Encounter Admission Stream", list(ADMISSION_TYPE_MAP.values()))
+    st.header("1. Profile & Demographics")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        race = st.selectbox("Race Base", RACE_OPTIONS)
+    with col2:
+        gender = st.selectbox("Gender Identification", GENDER_OPTIONS)
+    with col3:
+        age_group = st.selectbox("Patient Age Bracket Range", AGE_GROUPS, index=6)
+
+    st.header("2. Encounter Logistics")
+    col_adm, col_dis = st.columns(2)
+    with col_adm:
+        admission_type_label = st.selectbox("Admission Type Designation", list(ADMISSION_TYPE_MAP.values()))
         admission_type_id = [k for k, v in ADMISSION_TYPE_MAP.items() if v == admission_type_label][0]
         
-        admission_source_label = st.selectbox("Inbound Referral Stream Source", list(ADMISSION_SOURCE_MAP.values()), index=6)
+        admission_source_label = st.selectbox("Source Referral Origin", list(ADMISSION_SOURCE_MAP.values()), index=6)
         admission_source_id = [k for k, v in ADMISSION_SOURCE_MAP.items() if v == admission_source_label][0]
-        
-        discharge_disposition_label = st.selectbox("Planned Discharge Exit Strategy", list(DISCHARGE_DISPOSITION_MAP.values()))
+    with col_dis:
+        discharge_disposition_label = st.selectbox("Discharge Destination Status", list(DISCHARGE_DISPOSITION_MAP.values()))
         discharge_disposition_id = [k for k, v in DISCHARGE_DISPOSITION_MAP.items() if v == discharge_disposition_label][0]
-
-        time_in_hospital = st.slider("Encounter Duration Scale (Days In Bed)", 1, 14, 3)
-
-        st.subheader("Clinical Activity Totals")
-        t1, t2, t3 = st.columns(3)
-        with t1:
-            num_lab_procedures = st.number_input("Lab Profiles Executed", 0, 150, 40)
-            number_outpatient = st.number_input("Outpatient Visits (12mo)", 0, 50, 0)
-        with t2:
-            num_procedures = st.number_input("Surgical/Other Interventions", 0, 10, 1)
-            number_emergency = st.number_input("ER Admissions (12mo)", 0, 50, 0)
-        with t3:
-            num_medications = st.number_input("Formulary Drug Count", 0, 80, 15)
-            number_inpatient = st.number_input("Prior Inpatient Stays", 0, 30, 0)
-            
-        number_diagnoses = st.slider("Total Indexed Secondary Diagnoses", 1, 16, 7)
-
-        st.subheader("Diagnostic Categorization")
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            diag_1 = st.selectbox("Primary ICD Vector (Diag 1)", DIAG_CHOICES, index=3)
-        with d2:
-            diag_2 = st.selectbox("Secondary Vector (Diag 2)", DIAG_CHOICES, index=0)
-        with d3:
-            diag_3 = st.selectbox("Tertiary Vector (Diag 3)", DIAG_CHOICES, index=0)
-
-        st.subheader("Therapeutic Formulations")
-        drug_values = {}
-        primary_drugs = ["metformin", "insulin", "glipizide", "glyburide", "pioglitazone", "rosiglitazone", "glimepiride", "repaglinide"]
         
-        # Grid loop layout substitution for a more concise UI presentation
-        for chunk in [primary_drugs[i:i + 4] for i in range(0, len(primary_drugs), 4)]:
-            cols = st.columns(4)
-            for idx, drug_name in enumerate(chunk):
-                with cols[idx]:
-                    drug_values[drug_name] = st.selectbox(drug_name.capitalize(), ["No", "Steady", "Up", "Down"], key=f"v_{drug_name}")
-                    
-        with st.expander("Secondary Sub-therapeutic Agent Tracks"):
-            remaining_drugs = [d for d in DRUG_COLS if d not in primary_drugs]
-            for chunk in [remaining_drugs[i:i + 4] for i in range(0, len(remaining_drugs), 4)]:
-                cols = st.columns(4)
-                for idx, drug_name in enumerate(chunk):
-                    if idx < len(cols):
-                        with cols[idx]:
-                            drug_values[drug_name] = st.selectbox(drug_name.replace("-", " ").title(), ["No", "Steady", "Up", "Down"], key=f"v_{drug_name}")
+        time_in_hospital = st.slider("Duration of Stay (Days)", min_value=1, max_value=14, value=3)
 
-        m1, m2 = st.columns(2)
-        with m1:
-            change = st.selectbox("Course Dosages Adjusted During Visit", ["No", "Ch"])
-        with m2:
-            diabetesMed = st.selectbox("Active Insulin/Diabetes Treatment Plan", ["Yes", "No"])
+    st.header("3. Clinical Evaluation Metrics")
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        num_lab_procedures = st.number_input("Lab Test Count", 0, 150, 40)
+        number_outpatient = st.number_input("Prior Outpatient Visits (Past Year)", 0, 50, 0)
+    with col_m2:
+        num_procedures = st.number_input("Non-Lab Procedures Conducted", 0, 10, 1)
+        number_emergency = st.number_input("Prior Emergency Encounters (Past Year)", 0, 50, 0)
+    with col_m3:
+        num_medications = st.number_input("Total Prescribed Medications", 0, 80, 15)
+        number_inpatient = st.number_input("Prior Inpatient Admissions (Past Year)", 0, 30, 0)
+        
+    number_diagnoses = st.slider("Total Diagnoses Entered on Chart", 1, 16, 7)
 
-# ======================================================================
-# ANALYTICS WORKSPACE GENERATION
-# ======================================================================
-with output_workspace:
-    st.markdown('<div class="section-banner">Dynamic Readmission Diagnostic Panel</div>', unsafe_allow_html=True)
+    st.header("4. Primary Conditions")
+    col_d1, col_d2, col_d3 = st.columns(3)
+    with col_d1:
+        diag_1 = st.selectbox("Primary Diagnosis Class", DIAG_CHOICES, index=3)
+    with col_d2:
+        diag_2 = st.selectbox("Secondary Diagnosis Class", DIAG_CHOICES, index=0)
+    with col_d3:
+        diag_3 = st.selectbox("Tertiary Diagnosis Class", DIAG_CHOICES, index=0)
+
+    st.header("5. Diabetic Medication Control Tracks")
+    drug_values = {}
+    primary_drugs = ["metformin", "insulin", "glipizide", "glyburide", "pioglitazone", "rosiglitazone", "glimepiride", "repaglinide"]
     
-    # Pack parameters
+    # Loop splits common medications into an elegant simple clean layout
+    for i in range(0, len(primary_drugs), 4):
+        cols = st.columns(4)
+        for idx, drug in enumerate(primary_drugs[i:i+4]):
+            with cols[idx]:
+                drug_values[drug] = st.selectbox(drug.capitalize(), ["No", "Steady", "Up", "Down"], key=f"inp_{drug}")
+
+    with st.expander("Show Extended Minor Medications Tracks"):
+        remaining_drugs = [d for d in DRUG_COLS if d not in primary_drugs]
+        for i in range(0, len(remaining_drugs), 4):
+            cols = st.columns(4)
+            for idx, drug in enumerate(remaining_drugs[i:i+4]):
+                with cols[idx]:
+                    drug_values[drug] = st.selectbox(drug.replace("-", " ").title(), ["No", "Steady", "Up", "Down"], key=f"inp_{drug}")
+
+    col_ch, col_med = st.columns(2)
+    with col_ch:
+        change = st.selectbox("Medication Dosage Change Noted", ["No", "Ch"])
+    with col_med:
+        diabetesMed = st.selectbox("Any Diabetes Meds Active on Plan", ["Yes", "No"])
+
+    st.markdown("---")
+    submitted = st.form_submit_button("Calculate Patient Risk Index", use_container_width=True)
+
+# ======================================================================
+# ACCESSIBLE DATA INTERPRETATION OUTPUT
+# ======================================================================
+if submitted:
     form_values = {
         "race": race, "gender": gender, "age_group": age_group,
         "admission_type_id": admission_type_id,
@@ -383,81 +310,34 @@ with output_workspace:
         prediction, probability = predict_readmission(form_values)
         risk_pct = probability * 100
         safe_pct = 100 - risk_pct
-        confidence = "High Accuracy Profile" if abs(risk_pct - 50) > 20 else "Intermediate Variance Profile"
+        confidence = "HIGH PROFILE CONVERGENCE" if abs(risk_pct - 50) > 20 else "MODERATE STABILITY SHIFT"
 
-        # Change styles depending dynamically on output context
+        st.subheader("Analysis Results Summary")
+
+        # Standard clean alerts based on model classification thresholds
         if prediction == 1:
-            theme_color = "#dc2626" # Clean Crimson Red
-            alert_header = "🚨 ELEVATED READMISSION HAZARD DETECTED"
-            alert_body = "Patient telemetry charts closely track historical high-risk re-entry patterns within 30-days post-discharge. Immediate clinical workflow mitigation and structured oversight tracking recommended."
+            st.error("🚨 **High Readmission Risk Alert**")
+            verdict_text = "The patient's chart tracks closely with historical patients who were readmitted within 30 days."
         else:
-            theme_color = "#2563eb" # Modern Clinical Blue
-            alert_header = "✅ PROFILE STABILIZED"
-            alert_body = "The structural characteristics of this inpatient event signify baseline risk compliance patterns. Standard institutional post-discharge workflow patterns remain acceptable."
+            st.success("✅ **Low Readmission Risk Confirmed**")
+            verdict_text = "The patient's clinical profile matches stable baselines with lower re-entry tendencies."
 
-        # High visibility clean KPI Metric Cards
-        st.markdown(f"""
-        <div style="background-color: #f8fafc; border-left: 5px solid {theme_color}; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
-            <h4 style="margin: 0 0 6px 0; color: {theme_color}; font-size: 16px; letter-spacing: -0.2px;">{alert_header}</h4>
-            <p style="margin: 0; color: #475569; font-size: 13.5px; line-height: 1.5;">{alert_body}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Gauge Visualizations Minimal Configuration Block
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=risk_pct,
-            number={"suffix": "%", "valueformat": ".1f", "font": {"size": 44, "color": "#0f172a", "family": "Inter"}},
-            gauge={
-                "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#94a3b8"},
-                "bar": {"color": theme_color, "thickness": 0.25},
-                "bgcolor": "#f1f5f9",
-                "borderwidth": 1,
-                "bordercolor": "#cbd5e1"
-            }
-        ))
-        
-        fig.update_layout(
-            height=200, 
-            margin=dict(l=30, r=30, t=10, b=10),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        
-        # Dual Segment Breakdown Display Elements
-        st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
-        m_col1, m_col2 = st.columns(2)
-        
-        with m_col1:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div style="font-size: 11px; font-weight:600; color: #64748b; text-transform: uppercase;">Uncomplicated Baseline Prob.</div>
-                <div style="font-size: 24px; font-weight:700; color: #0f172a; margin-top:4px;">{safe_pct:.1f}%</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with m_col2:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div style="font-size: 11px; font-weight:600; color: #64748b; text-transform: uppercase;">Model Categorization Profile</div>
-                <div style="font-size: 16px; font-weight:600; color: #334155; margin-top:10px;">{confidence}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        # High visibility statistics without using complex custom layouts
+        col_res1, col_res2, col_res3 = st.columns(3)
+        with col_res1:
+            st.metric(label="Readmission Probability", value=f"{risk_pct:.1f}%")
+        with col_res2:
+            st.metric(label="Stable Recovery Profile", value=f"{safe_pct:.1f}%")
+        with col_res3:
+            st.metric(label="Pipeline Confidence Check", value=confidence)
 
-        # Indeterminate safety validation tracking boundary indicators
+        st.info(f"**Interpretation Detail:** {verdict_text}")
+
+        # Basic accessibility fallback safety message 
         if 45 <= risk_pct <= 55:
-            st.warning("⚠️ Equivocal Risk Warning: Patient metrics map to an intermediate clinical threshold border profile. Augment evaluation via qualitative baseline history verification.")
-
-        st.caption("🔒 Computational Support Logic Only — This analysis framework functions as a screening evaluation heuristic and does not supplant final professional clinical directives.")
+            st.warning("⚠️ **Borderline Assessment Profile Warning:** Risk values are hanging close to standard equilibrium thresholds. Defer heavily to hands-on qualitative screening.")
 
     except Exception as e:
-        st.error(f"Inference Pipeline Error: Could not evaluate input tracking array. Detailed trace: {e}")
-
-# Footer Signature Element Blocks
-st.markdown("""
-<div style="margin-top: 80px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8;">
-    Pulse Analytical Framework • Institutional Strategy Testing Platform Prototype Only • Not Validated for Independent Patient Diagnostics
-</div>
-""", unsafe_allow_html=True)
+        st.error(f"Calculation Interrupted by Pipeline Event: {e}")
+else:
+    st.info("Input clinical details above and select **Calculate Patient Risk Index** to run the prediction model.")
